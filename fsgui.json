@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "buttonTitle": "FuSys Tools",
+  "panelTitle": "FuSysTools",
+
+   "autoExec": [
+        {
+            "type": "runTasks",
+            "tasks": {
+                   "mode": "parsed",
+                    "args": "python3 fusys.py --getFusysPath",
+                    "outputs":
+                        {
+                        "widget": "variable",
+                        "target": "fusysPath"
+                        }
+
+                }
+        },
+        {
+            "type": "runTasks",
+            "tasks": {
+                "mode": "parsed",
+                "args": "python3 fusys.py --availableBuilds",
+                "outputs":
+                    {
+                    "target": "buildSelect",
+                    "widget": "select-options",
+                    "mode": "set",
+                    "parser": {
+                        "pattern": "^(?<value>.*)$",
+                        "labelGroup": "value",
+                        "valueGroup": "value"
+                        }
+                    }
+                }
+            },
+        {
+            "type": "runTasks",
+            "tasks": {
+                   "mode": "parsed",
+                    "args": "python3 fusys.py --availableMachines build={{buildSelect}}",
+                    "outputs": [
+                        {
+                            "target": "machineSelect",
+                            "widget": "select-options",
+                            "mode": "set",
+                            "parser": {
+                                "pattern": "^(?<value>.*)$",
+                                "labelGroup": "value",
+                                "valueGroup": "value"
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+            "type": "runTasks",
+                "tasks": {
+                    "mode": "parsed",
+                    "args": "python3 fusys.py --availableImages build={{buildSelect}} machine={{machineSelect}}",
+                    "outputs": {
+                        "target": "imageSelect",
+                        "widget": "select-options",
+                        "mode": "set",
+                        "parser": {
+                            "pattern": "^(?<value>.*)$",
+                            "labelGroup": "value",
+                            "valueGroup": "value"
+                        }
+                    }
+                }
+            }
+    ],
+    "components": [
+
+        {
+            "type": "h4",
+            "text": "Select available build to work with"
+        },
+        {
+            "type": "selectbox",
+            "id": "buildSelect",
+            "options": [],
+            "action": {
+            "type": "runTasks",
+            "tasks": {
+                   "mode": "parsed",
+                    "args": "python3 fusys.py --availableMachines build={{buildSelect}}",
+                    "outputs": [
+                        {
+                            "target": "machineSelect",
+                            "widget": "select-options",
+                            "mode": "set",
+                            "parser": {
+                                "pattern": "^(?<value>.*)$",
+                                "labelGroup": "value",
+                                "valueGroup": "value"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "h4",
+            "text": "Select available machine to work with"
+        },
+        {
+            "type": "selectbox",
+            "id": "machineSelect",
+            "options": [],
+            "action":[
+                {
+                "type": "runTasks",
+                "tasks": {
+                    "mode": "parsed",
+                    "args": "python3 fusys.py --availableImages build={{buildSelect}} machine={{machineSelect}}",
+                    "outputs": {
+                        "target": "imageSelect",
+                        "widget": "select-options",
+                        "mode": "set",
+                        "parser": {
+                            "pattern": "^(?<value>.*)$",
+                            "labelGroup": "value",
+                            "valueGroup": "value"
+                        }
+                    }
+                }
+            },
+            {
+                "type": "reload"
+            }
+        ]
+        },
+        {
+        "type": "selectbox",
+        "id": "imageSelect",
+        "label": {
+            "text": "Select available image to work with:",
+            "position": "top"
+        },
+        "options": []
+        },
+        { "type": "tabs" }
+  ]
+}
