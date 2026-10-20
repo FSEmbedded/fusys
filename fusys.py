@@ -27,10 +27,67 @@ import subprocess
 import shutil
 import json
 import os
+import xml.etree.ElementTree as ET
 script_dir = Path(__file__).resolve().parent
 config_file=f"{script_dir}/.fusys.ini"
 CONFIG = configparser.ConfigParser()
 CONFIG.read(config_file)
+
+def setup(buildir):
+    if not buildir.strip():
+        raise ValueError("buildir must not be empty")
+    build_path = Path(buildir).expanduser().resolve()
+    manifest = ET.parse(script_dir / "fs-release-manifest.xml").getroot()
+    release = manifest.find("release")
+    docker = manifest.find("docker")
+    if release is None or docker is None:
+        raise ValueError("Manifest requires release and docker elements")
+    if not release.get("arch") or not release.get("version") or not docker.get("version"):
+        raise ValueError("Manifest requires release arch/version and docker version")
+
+    config = configparser.ConfigParser()
+    config["release"] = {
+        "name": release.get("name") or release.get("arch"),
+        "arch": release.get("arch"),
+        "version": release.get("version"),
+        "build_dir": str(build_path),
+    }
+    for name, script in (("docker-fus", "fus-docker.py"),
+                         ("yocto-fus", "fus-build.py"),
+                         ("fs-cve-tracker", "fs-cve-tracker.py")):
+        project = manifest.find(f"project[@name='{name}']")
+        if project is not None:
+            project_path = Path(project.get("path") or name)
+        elif name == "yocto-fus":
+            project = manifest.find("project[@name='meta-fus']")
+            if project is None or not project.get("path"):
+                raise ValueError("Manifest requires yocto-fus or meta-fus with a path")
+            project_path = Path(project.get("path")).parent.parent
+        else:
+            raise ValueError(f"Manifest requires project {name}")
+        config[name] = {"path": str(build_path / project_path), "script": script}
+        if name == "docker-fus":
+            config[name]["tag"] = docker.get("version")
+
+    docker_config = configparser.ConfigParser()
+    docker_config["docker-fus"] = {
+        "build_dir": str(build_path),
+        "tag": config["docker-fus"]["tag"],
+    }
+    docker_config_path = Path(config["docker-fus"]["path"]) / ".docker.ini"
+    with open(docker_config_path, "w", encoding="utf-8") as output:
+        docker_config.write(output, space_around_delimiters=False)
+
+    yocto_build_config = Path(config["yocto-fus"]["path"]) / ".docker_path"
+    with open(yocto_build_config, "w", encoding="utf-8") as output:
+        output.write(str(Path(config["docker-fus"]["path"]) / config["docker-fus"]["script"]))
+
+    yocto_build_config = Path(config["yocto-fus"]["path"]) / ".fusys_archs"
+    with open(yocto_build_config, "w", encoding="utf-8") as output:
+        output.write(config["release"]["arch"])
+
+    with open(config_file, "w", encoding="utf-8") as output:
+        config.write(output, space_around_delimiters=False)
 
 def set_config_value(path, key, value):
     path = Path(path)
@@ -163,12 +220,10 @@ class fusys:
         return Path(__file__).resolve()
 
 
-
 if __name__ == "__main__":
-    fusys = fusys()
-    fsbuild = fsbuild()
-
     parser = argparse.ArgumentParser(description="F&S development environment")
+    parser.add_argument("--setup", nargs=1, metavar="build_dir=...",
+                        help="Generate .fusys.ini from fs-release-manifest.xml")
     parser.add_argument("--getReleaseName", action="store_true",
                         help="Get the release name of this build")
     parser.add_argument("--supportedMachines", action="store_true",
@@ -189,6 +244,17 @@ if __name__ == "__main__":
     parser.add_argument("--importSBOMfiles", nargs=4, metavar=("build=...", "machine=...", "image=...", "inputDir=..."),
                         help="Import files from a specific build, architecture, and image")
     args = parser.parse_args()
+
+    if args.setup:
+        setup_args = parseNamedArguments(parser, "--setup", args.setup, ("build_dir",))
+        try:
+            setup(setup_args["build_dir"])
+        except (OSError, ET.ParseError, ValueError) as error:
+            parser.error(f"--setup: {error}")
+        raise SystemExit(0)
+
+    fusys = fusys()
+    fsbuild = fsbuild()
 
     if args.supportedMachines:
         print (fusys.get_supported_machines())
@@ -218,3 +284,5 @@ if __name__ == "__main__":
     if args.importSBOMfiles:
         import_args = parseNamedArguments(parser, "--importSBOMfiles", args.importSBOMfiles, ("build", "machine", "image"), ("inputDir",))
         fsbuild.import_from_build(import_args["build"], import_args["machine"], import_args["image"], import_args["inputDir"])
+
+
