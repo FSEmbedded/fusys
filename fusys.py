@@ -84,7 +84,7 @@ def setup(buildir):
 
     yocto_build_config = Path(config["yocto-fus"]["path"]) / ".fusys_archs"
     with open(yocto_build_config, "w", encoding="utf-8") as output:
-        output.write(config["release"]["arch"])
+        output.write("\n".join(config["release"]["arch"].split()) + "\n")
 
     with open(config_file, "w", encoding="utf-8") as output:
         config.write(output, space_around_delimiters=False)
@@ -197,7 +197,11 @@ class fsbuild:
 
         def get_rauc_update_bundle(self, build, arch, image):
             deployPath = self.get_deploy_path(build, arch)
-            return str(Path(deployPath) / f"fus-fw-bundle-{arch}.raucb")
+            bundlePath = Path(deployPath) / f"fus-fw-bundle-{arch}.raucb"
+            if not bundlePath.exists():
+                return ""
+            else:
+                return str(bundlePath)
 
 class fusys:
     def __init__(self, config = CONFIG):
@@ -284,5 +288,6 @@ if __name__ == "__main__":
     if args.importSBOMfiles:
         import_args = parseNamedArguments(parser, "--importSBOMfiles", args.importSBOMfiles, ("build", "machine", "image"), ("inputDir",))
         fsbuild.import_from_build(import_args["build"], import_args["machine"], import_args["image"], import_args["inputDir"])
+
 
 
